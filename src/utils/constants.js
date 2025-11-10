@@ -62,4 +62,4 @@ export const TIME_OF_DAY_GRADIENTS = {
 export const WORK_DURATION = 1500; // 25 минут в секундах
 export const BREAK_DURATION = 300; // 5 минут
 export const AFK_TIMEOUT = 30; // 30 секунд
-export const STRESS_THRESHOLD = 10; // Backspace порог
+export const STRESS_THRESHOLD = 30; // Backspace порог

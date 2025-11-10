@@ -70,10 +70,10 @@ const MusicPlayer = ({ show, onClose, onToggle, isPlaying }) => {
                         </motion.div>
                         <div>
                             <div className="font-semibold">Расслабляющая музыка</div>
-                            <div className="text-xs opacity-75">Lofi hip hop beats</div>
+                            <div className="text-xs opacity-75">massobeats - rose water</div>
                         </div>
                         <button
-                            onClick={() => onToggle()}
+                            onClick={onToggle}  // Изменено с () => onToggle() на onToggle
                             className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                         >
                             <X size={18} />

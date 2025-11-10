@@ -23,6 +23,8 @@ import { getRandomMessage } from './utils/messages';
 import { getTimeOfDay, calculateActivityScore, getUserMode, getViewMode } from './utils/helpers';
 
 function App() {
+    const audioRef = useRef(null);
+
     // Загрузка задач из localStorage
     const [tasks, setTasks] = useState(() => {
         try {
@@ -34,6 +36,7 @@ function App() {
         }
     });
 
+    const [musicSuggestionDismissed, setMusicSuggestionDismissed] = useState(false);
     const [input, setInput] = useState('');
     const [editingTask, setEditingTask] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
@@ -79,13 +82,27 @@ function App() {
     useEffect(() => {
         if (backspaceCount > STRESS_THRESHOLD) {
             setIsStressed(true);
-            if (!showMusicSuggestion && !musicPlaying) {
+            if (!showMusicSuggestion && !musicPlaying && !musicSuggestionDismissed) {
                 setShowMusicSuggestion(true);
             }
         } else if (backspaceCount < 5) {
             setIsStressed(false);
+            setMusicSuggestionDismissed(false);
         }
     }, [backspaceCount, showMusicSuggestion, musicPlaying]);
+
+    // Музыка
+    useEffect(() => {
+        audioRef.current = new Audio('/music.mp3');
+        audioRef.current.loop = true;
+
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+        };
+    }, []);
 
     // Расчет режима пользователя
     useEffect(() => {
@@ -225,7 +242,13 @@ function App() {
     };
 
     const toggleMusic = () => {
-        setMusicPlaying(!musicPlaying);
+        if (musicPlaying) {
+            audioRef.current?.pause();
+            setMusicPlaying(false);
+        } else {
+            audioRef.current?.play().catch(err => console.log('Audio play failed:', err));
+            setMusicPlaying(true);
+        }
         setShowMusicSuggestion(false);
     };
 
@@ -249,6 +272,11 @@ function App() {
             title: 'Удачи!',
             text: 'Хорошей работы!'
         });
+    };
+
+    const closeMusicSuggestion = () => {
+        setShowMusicSuggestion(false);
+        setMusicSuggestionDismissed(true); // Запоминаем, что пользователь отклонил
     };
 
     // Конфигурация режима
@@ -298,7 +326,7 @@ function App() {
 
             <MusicPlayer
                 show={showMusicSuggestion}
-                onClose={() => setShowMusicSuggestion(false)}
+                onClose={() => closeMusicSuggestion()}
                 onToggle={toggleMusic}
                 isPlaying={musicPlaying}
             />
