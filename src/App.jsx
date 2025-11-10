@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
 
 // Компоненты
 import AFKOverlay from './components/AFKOverlay';
@@ -16,42 +15,19 @@ import WorkTimer from './components/WorkTimer';
 // Хуки
 import { useBehaviorTracking } from './hooks/useBehaviorTracking';
 import { useNotifications } from './hooks/useNotifications';
+import { useTaskManager } from './hooks/useTaskManager';
+import { useUserMode } from './hooks/useUserMode';
+import { useStressDetection } from './hooks/useStressDetection';
+import { useMusicPlayer } from './hooks/useMusicPlayer';
+import { useWorkTimer } from './hooks/useWorkTimer';
+import { useTimeOfDay } from './hooks/useTimeOfDay';
 
 // Утилиты
-import { MODE_CONFIG, TIME_OF_DAY_GRADIENTS, WORK_DURATION, BREAK_DURATION, AFK_TIMEOUT, STRESS_THRESHOLD } from './utils/constants';
-import { getRandomMessage } from './utils/messages';
-import { getTimeOfDay, calculateActivityScore, getUserMode, getViewMode } from './utils/helpers';
+import { MODE_CONFIG, TIME_OF_DAY_GRADIENTS, WORK_DURATION } from './utils/constants';
+import { getViewMode } from './utils/helpers';
 
 function App() {
-    const audioRef = useRef(null);
-
-    // Загрузка задач из localStorage
-    const [tasks, setTasks] = useState(() => {
-        try {
-            const saved = localStorage.getItem('adaptive-tasks');
-            return saved ? JSON.parse(saved) : [];
-        } catch (error) {
-            console.error('Error loading tasks:', error);
-            return [];
-        }
-    });
-
-    const [musicSuggestionDismissed, setMusicSuggestionDismissed] = useState(false);
-    const [input, setInput] = useState('');
-    const [editingTask, setEditingTask] = useState(null);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [breakFinished, setBreakFinished] = useState(false);
-
-    // Сохранение задач в localStorage при изменении
-    useEffect(() => {
-        try {
-            localStorage.setItem('adaptive-tasks', JSON.stringify(tasks));
-        } catch (error) {
-            console.error('Error saving tasks:', error);
-        }
-    }, [tasks]);
-
-    // Используем кастомные хуки
+    // Трекинг поведения
     const {
         clicks,
         mouseSpeed,
@@ -62,108 +38,58 @@ function App() {
         trackBackspace
     } = useBehaviorTracking();
 
+    // Уведомления
     const { notifications, showNotification, closeNotification } = useNotifications();
 
-    // Режимы и состояния
-    const [userMode, setUserMode] = useState('normal');
-    const [activityScore, setActivityScore] = useState(50);
-    const [isStressed, setIsStressed] = useState(false);
-    const [showMusicSuggestion, setShowMusicSuggestion] = useState(false);
-    const [musicPlaying, setMusicPlaying] = useState(false);
-    const [timeOfDay, setTimeOfDay] = useState(getTimeOfDay());
+    // Определение режима пользователя
+    const { userMode, activityScore, handleWakeUp } = useUserMode(
+        clicks,
+        mouseSpeed,
+        typingSpeed,
+        lastActivityTime
+    );
 
-    // Таймеры
-    const [workTimer, setWorkTimer] = useState(1);
-    const [breakTimer, setBreakTimer] = useState(0);
-    const [isOnBreak, setIsOnBreak] = useState(false);
-    const [showBreakSuggestion, setShowBreakSuggestion] = useState(false);
+    // Управление задачами
+    const {
+        tasks,
+        input,
+        setInput,
+        editingTask,
+        modalOpen,
+        addTask,
+        toggleTask,
+        deleteTask,
+        openEditModal,
+        saveTask,
+        closeModal
+    } = useTaskManager(showNotification, userMode);
 
-    // Детектор стресса
-    useEffect(() => {
-        if (backspaceCount > STRESS_THRESHOLD) {
-            setIsStressed(true);
-            if (!showMusicSuggestion && !musicPlaying && !musicSuggestionDismissed) {
-                setShowMusicSuggestion(true);
-            }
-        } else if (backspaceCount < 5) {
-            setIsStressed(false);
-            setMusicSuggestionDismissed(false);
-        }
-    }, [backspaceCount, showMusicSuggestion, musicPlaying]);
+    // Детекция стресса
+    const {
+        isStressed,
+        showMusicSuggestion,
+        setShowMusicSuggestion,
+        closeMusicSuggestion
+    } = useStressDetection(backspaceCount);
 
-    // Музыка
-    useEffect(() => {
-        audioRef.current = new Audio('/music.mp3');
-        audioRef.current.loop = true;
+    // Музыкальный плеер
+    const { musicPlaying, toggleMusic } = useMusicPlayer();
 
-        return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-        };
-    }, []);
+    // Таймер работы и перерывов
+    const {
+        workTimer,
+        breakTimer,
+        isOnBreak,
+        showBreakSuggestion,
+        breakFinished,
+        startBreak,
+        skipBreak
+    } = useWorkTimer(lastActivityTime, showNotification);
 
-    // Расчет режима пользователя
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const now = Date.now();
-            const timeSinceLastActivity = (now - lastActivityTime.current) / 1000;
+    // Время суток
+    const timeOfDay = useTimeOfDay();
 
-            if (timeSinceLastActivity > AFK_TIMEOUT) {
-                setUserMode('afk');
-                return;
-            }
-
-            const score = calculateActivityScore(clicks, mouseSpeed, typingSpeed);
-            setActivityScore(Math.round(score * 100));
-            setUserMode(getUserMode(score));
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, [clicks, mouseSpeed, typingSpeed, lastActivityTime]);
-
-    // Таймер работы и перерыва
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const now = Date.now();
-            const timeSinceLastActivity = (now - lastActivityTime.current) / 1000;
-            const isAfk = timeSinceLastActivity > AFK_TIMEOUT;
-
-            if (isOnBreak) {
-                setBreakTimer(prev => {
-                    if (prev <= 1) {
-                        setBreakFinished(true);
-                        setIsOnBreak(false);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }
-            else if (!isAfk) {
-                setWorkTimer(prev => {
-                    if (prev >= WORK_DURATION) {
-                        setShowBreakSuggestion(true);
-                        return prev;
-                    }
-                    return prev + 1;
-                });
-            }
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, [isOnBreak]);
-
-    // Обновление времени суток
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setTimeOfDay(getTimeOfDay());
-        }, 300000);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    // Обработчики задач
+    // Обработчики ввода
     const handleInputChange = (e) => {
         trackTyping();
         setInput(e.target.value);
@@ -175,111 +101,7 @@ function App() {
         }
     };
 
-    const addTask = () => {
-        if (input.trim()) {
-            const newTask = {
-                id: Date.now(),
-                title: input,
-                description: '',
-                tags: [],
-                estimatedTime: { days: 0, hours: 0, minutes: 0 },
-                completed: false,
-                createdAt: Date.now(),
-                completedAt: null
-            };
-            setTasks([...tasks, newTask]);
-            setInput('');
-
-            const msg = getRandomMessage('add');
-            showNotification({ type: 'info', ...msg });
-        }
-    };
-
-    const toggleTask = (id) => {
-        setTasks(tasks.map(t => {
-            if (t.id === id && !t.completed) {
-                confetti({
-                    particleCount: userMode === 'active' ? 50 : userMode === 'calm' ? 150 : 100,
-                    spread: userMode === 'active' ? 50 : userMode === 'calm' ? 90 : 70,
-                    origin: { y: 0.6 }
-                });
-
-                const msg = getRandomMessage('complete');
-                showNotification({ type: 'success', ...msg });
-
-                return { ...t, completed: true, completedAt: Date.now() };
-            }
-            if (t.id === id && t.completed) {
-                return { ...t, completed: false, completedAt: null };
-            }
-            return t;
-        }));
-    };
-
-    const deleteTask = (id) => {
-        setTasks(tasks.filter(t => t.id !== id));
-        const msg = getRandomMessage('delete');
-        showNotification({ type: 'warning', ...msg });
-    };
-
-    const openEditModal = (task) => {
-        setEditingTask(task);
-        setModalOpen(true);
-    };
-
-    const saveTask = (updatedTask) => {
-        setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-        setModalOpen(false);
-        setEditingTask(null);
-
-        const msg = getRandomMessage('edit');
-        showNotification({ type: 'success', ...msg });
-    };
-
-    const handleWakeUp = () => {
-        lastActivityTime.current = Date.now();
-        setUserMode('normal');
-    };
-
-    const toggleMusic = () => {
-        if (musicPlaying) {
-            audioRef.current?.pause();
-            setMusicPlaying(false);
-        } else {
-            audioRef.current?.play().catch(err => console.log('Audio play failed:', err));
-            setMusicPlaying(true);
-        }
-        setShowMusicSuggestion(false);
-    };
-
-    const startBreak = () => {
-        setIsOnBreak(true);
-        setBreakTimer(BREAK_DURATION);
-        setWorkTimer(0);
-        setShowBreakSuggestion(false);
-        setBreakFinished(false);
-    };
-
-    const skipBreak = () => {
-        setWorkTimer(1);
-        setShowBreakSuggestion(false);
-        setBreakFinished(false);
-        setIsOnBreak(false);
-        setBreakTimer(0);
-        showNotification({
-            type: 'success',
-            emoji: '🔥',
-            title: 'Удачи!',
-            text: 'Хорошей работы!'
-        });
-    };
-
-    const closeMusicSuggestion = () => {
-        setShowMusicSuggestion(false);
-        setMusicSuggestionDismissed(true); // Запоминаем, что пользователь отклонил
-    };
-
-    // Конфигурация режима
+    // Конфигурация режима и стиля
     const config = MODE_CONFIG[userMode];
     const viewMode = getViewMode(tasks.length);
 
@@ -326,8 +148,8 @@ function App() {
 
             <MusicPlayer
                 show={showMusicSuggestion}
-                onClose={() => closeMusicSuggestion()}
-                onToggle={toggleMusic}
+                onClose={closeMusicSuggestion}
+                onToggle={() => toggleMusic(setShowMusicSuggestion)}
                 isPlaying={musicPlaying}
             />
 
@@ -339,10 +161,7 @@ function App() {
             <TaskModal
                 task={editingTask}
                 isOpen={modalOpen}
-                onClose={() => {
-                    setModalOpen(false);
-                    setEditingTask(null);
-                }}
+                onClose={closeModal}
                 onSave={saveTask}
             />
 
@@ -402,9 +221,8 @@ function App() {
 
                 {effectiveConfig.showTooltips && userMode !== 'afk' && (
                     <div className="mt-8 text-center text-sm text-gray-400 space-y-2">
-                        <p>💡 Кликайте на задачу для редактирования деталей</p>
-                        <p>😴 Не двигайте мышью 30 секунд, чтобы увидеть режим AFK</p>
-                        <p>⌨️ Попробуйте часто нажимать Backspace при вводе...</p>
+                        <p>Не двигайте мышью 30 секунд, чтобы увидеть режим AFK</p>
+                        <p>Попробуйте часто нажимать Backspace при вводе</p>
                     </div>
                 )}
             </div>

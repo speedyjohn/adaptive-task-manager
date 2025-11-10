@@ -3,16 +3,7 @@ import { motion } from 'framer-motion';
 import { Check, Trash2, Clock } from 'lucide-react';
 import { formatEstimatedTime } from '../utils/helpers';
 
-const TaskCard = ({
-                      task,
-                      config,
-                      animDuration,
-                      isStressed,
-                      onToggle,
-                      onDelete,
-                      onClick,
-                      viewMode
-                  }) => {
+const TaskCard = ({ task, config, animDuration, isStressed, onToggle, onDelete, onClick, viewMode }) => {
     const cardClass = isStressed
         ? 'border border-purple-300/30 shadow-purple-500/20'
         : config.border;

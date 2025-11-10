@@ -2,14 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Keyboard } from 'lucide-react';
 
-const TaskInput = ({
-                       value,
-                       onChange,
-                       onKeyDown,
-                       onSubmit,
-                       config,
-                       animDuration
-                   }) => {
+const TaskInput = ({ value, onChange, onKeyDown, onSubmit, config, animDuration }) => {
     const inputRef = useRef(null);
 
     // Горячая клавиша /

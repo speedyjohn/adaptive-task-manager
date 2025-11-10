@@ -2,16 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Zap, TrendingUp, Clock } from 'lucide-react';
 
-const MetricsDashboard = ({
-                              config,
-                              activityScore,
-                              clicks,
-                              mouseSpeed,
-                              typingSpeed,
-                              backspaceCount,
-                              isStressed,
-                              animDuration
-                          }) => {
+const MetricsDashboard = ({ config,activityScore, clicks, mouseSpeed, typingSpeed, backspaceCount, isStressed, animDuration }) => {
     const dashboardGradient = isStressed
         ? 'bg-gradient-to-br from-indigo-400 to-purple-400'
         : config.colors;
