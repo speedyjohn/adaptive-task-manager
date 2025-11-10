@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
 const TaskModal = ({ task, isOpen, onClose, onSave }) => {
     const [editingTask, setEditingTask] = useState(task);
+
+    // Синхронизируем состояние с входящим task
+    useEffect(() => {
+        if (task) {
+            setEditingTask(task);
+        }
+    }, [task]);
 
     const handleSave = () => {
         if (editingTask && editingTask.title.trim()) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
@@ -23,33 +23,29 @@ import { getRandomMessage } from './utils/messages';
 import { getTimeOfDay, calculateActivityScore, getUserMode, getViewMode } from './utils/helpers';
 
 function App() {
-    // Состояние задач
-    const [tasks, setTasks] = useState([
-        {
-            id: 1,
-            title: 'Изучить React hooks',
-            description: 'Пройти туториалы по useState, useEffect и кастомным хукам',
-            tags: ['обучение', 'react'],
-            estimatedTime: { days: 0, hours: 2, minutes: 30 },
-            completed: false,
-            createdAt: Date.now(),
-            completedAt: null
-        },
-        {
-            id: 2,
-            title: 'Настроить проект',
-            description: '',
-            tags: ['работа'],
-            estimatedTime: { days: 0, hours: 1, minutes: 0 },
-            completed: true,
-            createdAt: Date.now() - 3600000,
-            completedAt: Date.now() - 1800000
-        },
-    ]);
+    // Загрузка задач из localStorage
+    const [tasks, setTasks] = useState(() => {
+        try {
+            const saved = localStorage.getItem('adaptive-tasks');
+            return saved ? JSON.parse(saved) : [];
+        } catch (error) {
+            console.error('Error loading tasks:', error);
+            return [];
+        }
+    });
 
     const [input, setInput] = useState('');
     const [editingTask, setEditingTask] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
+
+    // Сохранение задач в localStorage при изменении
+    useEffect(() => {
+        try {
+            localStorage.setItem('adaptive-tasks', JSON.stringify(tasks));
+        } catch (error) {
+            console.error('Error saving tasks:', error);
+        }
+    }, [tasks]);
 
     // Используем кастомные хуки
     const {
@@ -73,7 +69,7 @@ function App() {
     const [timeOfDay, setTimeOfDay] = useState(getTimeOfDay());
 
     // Таймеры
-    const [workTimer, setWorkTimer] = useState(0);
+    const [workTimer, setWorkTimer] = useState(1);
     const [breakTimer, setBreakTimer] = useState(0);
     const [isOnBreak, setIsOnBreak] = useState(false);
     const [showBreakSuggestion, setShowBreakSuggestion] = useState(false);
@@ -109,9 +105,14 @@ function App() {
         return () => clearInterval(interval);
     }, [clicks, mouseSpeed, typingSpeed, lastActivityTime]);
 
-    // Таймер работы и перерыва
+    // Таймер работы и перерыва - ПРОСТАЯ И РАБОЧАЯ ВЕРСИЯ
     useEffect(() => {
         const interval = setInterval(() => {
+            const now = Date.now();
+            const timeSinceLastActivity = (now - lastActivityTime.current) / 1000;
+            const isAfk = timeSinceLastActivity > AFK_TIMEOUT;
+
+            // Если на перерыве - уменьшаем таймер перерыва
             if (isOnBreak) {
                 setBreakTimer(prev => {
                     if (prev <= 1) {
@@ -122,15 +123,18 @@ function App() {
                             title: 'Отдохнули?',
                             text: 'Время работать! Удачи!'
                         });
+                        setWorkTimer(1); // Перезапускаем рабочий таймер
                         return 0;
                     }
                     return prev - 1;
                 });
-            } else if (userMode !== 'afk' && workTimer > 0) {
+            }
+            // Если не на перерыве и не AFK - увеличиваем рабочий таймер
+            else if (!isAfk && workTimer > 0) {
                 setWorkTimer(prev => {
                     if (prev >= WORK_DURATION) {
                         setShowBreakSuggestion(true);
-                        return prev;
+                        return prev; // Останавливаем на максимуме
                     }
                     return prev + 1;
                 });
@@ -138,13 +142,13 @@ function App() {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [isOnBreak, userMode, workTimer, showNotification]);
+    }, [isOnBreak, workTimer, lastActivityTime, showNotification]);
 
     // Обновление времени суток
     useEffect(() => {
         const interval = setInterval(() => {
             setTimeOfDay(getTimeOfDay());
-        }, 300000); // каждые 5 минут
+        }, 300000);
 
         return () => clearInterval(interval);
     }, []);
@@ -178,18 +182,12 @@ function App() {
 
             const msg = getRandomMessage('add');
             showNotification({ type: 'info', ...msg });
-
-            // Запуск таймера работы
-            if (workTimer === 0 && !isOnBreak) {
-                setWorkTimer(1);
-            }
         }
     };
 
     const toggleTask = (id) => {
         setTasks(tasks.map(t => {
             if (t.id === id && !t.completed) {
-                // Конфетти при завершении
                 confetti({
                     particleCount: userMode === 'active' ? 50 : userMode === 'calm' ? 150 : 100,
                     spread: userMode === 'active' ? 50 : userMode === 'calm' ? 90 : 70,
@@ -221,6 +219,7 @@ function App() {
 
     const saveTask = (updatedTask) => {
         setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+        setModalOpen(false);
         setEditingTask(null);
 
         const msg = getRandomMessage('edit');
@@ -245,7 +244,7 @@ function App() {
     };
 
     const skipBreak = () => {
-        setWorkTimer(0);
+        setWorkTimer(1);
         setShowBreakSuggestion(false);
         showNotification({
             type: 'success',
@@ -259,7 +258,6 @@ function App() {
     const config = MODE_CONFIG[userMode];
     const viewMode = getViewMode(tasks.length);
 
-    // Применяем viewMode поверх config
     const effectiveConfig = {
         ...config,
         ...(viewMode === 'compact' && {
@@ -283,14 +281,13 @@ function App() {
         <div className={`min-h-screen bg-gradient-to-br ${bgGradient} text-white p-8 relative transition-colors duration-[2000ms]`}>
             {isStressed && <div className="fixed inset-0 bg-purple-900/10 pointer-events-none transition-opacity duration-[2000ms]" />}
 
-            {/* Таймеры */}
             <WorkTimer
                 workTimer={workTimer}
                 breakTimer={breakTimer}
                 isOnBreak={isOnBreak}
                 workDuration={WORK_DURATION}
             />
-            {/* Оверлеи и модалки */}
+
             <AFKOverlay show={userMode === 'afk'} onWakeUp={handleWakeUp} />
 
             <BreakSuggestion
@@ -321,9 +318,7 @@ function App() {
                 onSave={saveTask}
             />
 
-            {/* Основной контент */}
             <div className="max-w-4xl mx-auto">
-                {/* Заголовок */}
                 <h1 className="text-4xl font-bold mb-2 text-center">
                     Адаптивный Таск-Менеджер
                 </h1>
@@ -331,7 +326,6 @@ function App() {
                     Интерфейс адаптируется под ваш стиль работы
                 </p>
 
-                {/* Дашборд метрик */}
                 <MetricsDashboard
                     config={effectiveConfig}
                     activityScore={activityScore}
@@ -343,7 +337,6 @@ function App() {
                     animDuration={animDuration}
                 />
 
-                {/* Форма добавления */}
                 <TaskInput
                     value={input}
                     onChange={handleInputChange}
@@ -353,7 +346,6 @@ function App() {
                     animDuration={animDuration}
                 />
 
-                {/* Список задач */}
                 <div className={`flex flex-col ${effectiveConfig.cardSpacing}`}>
                     <AnimatePresence mode="popLayout">
                         {tasks.map((task) => (
@@ -372,7 +364,6 @@ function App() {
                     </AnimatePresence>
                 </div>
 
-                {/* Пустой список */}
                 {tasks.length === 0 && (
                     <div className="text-center text-gray-500 mt-12">
                         <p className={effectiveConfig.fontSize}>
@@ -381,7 +372,6 @@ function App() {
                     </div>
                 )}
 
-                {/* Подсказки */}
                 {effectiveConfig.showTooltips && userMode !== 'afk' && (
                     <div className="mt-8 text-center text-sm text-gray-400 space-y-2">
                         <p>💡 Кликайте на задачу для редактирования деталей</p>
@@ -393,4 +383,5 @@ function App() {
         </div>
     );
 }
+
 export default App;
