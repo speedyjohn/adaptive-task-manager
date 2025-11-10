@@ -37,6 +37,7 @@ function App() {
     const [input, setInput] = useState('');
     const [editingTask, setEditingTask] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
+    const [breakFinished, setBreakFinished] = useState(false);
 
     // Сохранение задач в localStorage при изменении
     useEffect(() => {
@@ -105,36 +106,28 @@ function App() {
         return () => clearInterval(interval);
     }, [clicks, mouseSpeed, typingSpeed, lastActivityTime]);
 
-    // Таймер работы и перерыва - ПРОСТАЯ И РАБОЧАЯ ВЕРСИЯ
+    // Таймер работы и перерыва
     useEffect(() => {
         const interval = setInterval(() => {
             const now = Date.now();
             const timeSinceLastActivity = (now - lastActivityTime.current) / 1000;
             const isAfk = timeSinceLastActivity > AFK_TIMEOUT;
 
-            // Если на перерыве - уменьшаем таймер перерыва
             if (isOnBreak) {
                 setBreakTimer(prev => {
                     if (prev <= 1) {
+                        setBreakFinished(true);
                         setIsOnBreak(false);
-                        showNotification({
-                            type: 'info',
-                            emoji: '💼',
-                            title: 'Отдохнули?',
-                            text: 'Время работать! Удачи!'
-                        });
-                        setWorkTimer(1); // Перезапускаем рабочий таймер
                         return 0;
                     }
                     return prev - 1;
                 });
             }
-            // Если не на перерыве и не AFK - увеличиваем рабочий таймер
-            else if (!isAfk && workTimer > 0) {
+            else if (!isAfk) {
                 setWorkTimer(prev => {
                     if (prev >= WORK_DURATION) {
                         setShowBreakSuggestion(true);
-                        return prev; // Останавливаем на максимуме
+                        return prev;
                     }
                     return prev + 1;
                 });
@@ -142,7 +135,7 @@ function App() {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [isOnBreak, workTimer, lastActivityTime, showNotification]);
+    }, [isOnBreak]);
 
     // Обновление времени суток
     useEffect(() => {
@@ -241,16 +234,20 @@ function App() {
         setBreakTimer(BREAK_DURATION);
         setWorkTimer(0);
         setShowBreakSuggestion(false);
+        setBreakFinished(false);
     };
 
     const skipBreak = () => {
         setWorkTimer(1);
         setShowBreakSuggestion(false);
+        setBreakFinished(false);
+        setIsOnBreak(false);
+        setBreakTimer(0);
         showNotification({
             type: 'success',
             emoji: '🔥',
-            title: 'Молодец!',
-            text: 'Продуктивная работа!'
+            title: 'Удачи!',
+            text: 'Хорошей работы!'
         });
     };
 
@@ -294,6 +291,9 @@ function App() {
                 show={showBreakSuggestion}
                 onStartBreak={startBreak}
                 onSkipBreak={skipBreak}
+                isOnBreak={isOnBreak}
+                breakTimer={breakTimer}
+                breakFinished={breakFinished}
             />
 
             <MusicPlayer

@@ -20,7 +20,7 @@ const Notification = ({ notifications, onClose }) => {
                     initial={{ opacity: 0, scale: 0.8, y: 50 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.8, y: 50 }}
-                    style={{ bottom: `${8 + idx * 6}rem` }}
+                    style={{ bottom: `${8 + idx * 8}rem` }}
                     className={`fixed right-8 z-40 max-w-md rounded-2xl p-6 shadow-2xl bg-gradient-to-br ${getGradient(notif.type)}`}
                 >
                     <button
