@@ -5,7 +5,7 @@ import { Plus, Keyboard } from 'lucide-react';
 const TaskInput = ({ value, onChange, onKeyDown, onSubmit, config, animDuration }) => {
     const inputRef = useRef(null);
 
-    // Горячая клавиша /
+    // Горячая клавиша "/"
     useEffect(() => {
         const handleGlobalKeyDown = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
